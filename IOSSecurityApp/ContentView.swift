@@ -6,9 +6,9 @@ import CommonCrypto
 struct ContentView: View {
     @State private var isTampered: Bool?
     @State private var tamperStatusText = ""
-    let expectedProvisionHash = "2976c70b56e9ae1e2c8e8b231bf6b0cff12bbbd0a593f21846d9a004dd181be3"
-    let expectedMachOHash = "6d8d460b9a4ee6c0f378e30f137cebaf2ce12bf31a2eef3729c36889158aa7fc"
-    let expectedBundleId = "com.xplo8E.IOSSecurityApp"
+    @State private var expectedProvisionHash: String?
+    @State private var expectedMachOHash: String?
+    @State private var expectedBundleId: String?
     @State private var resultText: AttributedString = AttributedString("Tap a button to run a security check")
     
     var body: some View {
@@ -31,8 +31,64 @@ struct ContentView: View {
             }
             .padding()
         }
+        .onAppear {
+            Task {
+                await fetchAllData()
+            }
+        }
     }
     
+//    //            "",
+//    "",
+//    ""
+    
+    
+    func fetchAllData() async {
+        await fetchProvisionHash()
+        await fetchMachOHash()
+        await fetchBundleId()
+    }
+    
+    func fetchProvisionHash() async {
+        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/Values/ProvisionHash") { result in
+            self.expectedProvisionHash = result
+        }
+    }
+    
+    func fetchMachOHash() async {
+        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/Values/MachOHash") { result in
+            self.expectedMachOHash = result
+        }
+    }
+    
+    func fetchBundleId() async {
+        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/BundleId") { result in
+            self.expectedBundleId = result
+        }
+    }
+    
+    func fetchData(from urlString: String, completion: @escaping (String?) -> Void) async {
+        guard let url = URL(string: urlString) else {
+            print("Invalid URL: \(urlString)")
+            completion(nil)
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            print("Response: \(response)")
+            let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            print("Fetched data: \(result ?? "nil")")
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        } catch {
+            print("Error fetching data from \(urlString): \(error)")
+            DispatchQueue.main.async {
+                completion(nil)
+            }
+        }
+    }
     
     func showBundleId() {
         resultText = "App BundleId: \n"
@@ -78,6 +134,14 @@ struct ContentView: View {
     }
     
     func checkIntegrity() {
+        guard let expectedProvisionHash = expectedProvisionHash,
+              let expectedMachOHash = expectedMachOHash,
+              let expectedBundleId = expectedBundleId else {
+            print("Expected data not loaded. ProvisionHash: \(expectedProvisionHash ?? "nil"), MachOHash: \(expectedMachOHash ?? "nil"), BundleId: \(expectedBundleId ?? "nil")")
+            resultText = AttributedString("Error: Server expected data not loaded")
+            return
+        }
+        
         let tamperCheck = IOSSecuritySuite.amITampered([.bundleID(expectedBundleId),
                                                         .mobileProvision(expectedProvisionHash),
                                                         .machO("IOSSecuritySuite", expectedMachOHash)])
