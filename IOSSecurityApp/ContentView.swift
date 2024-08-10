@@ -44,46 +44,74 @@ struct ContentView: View {
     
     
     func fetchAllData() async {
-        await fetchProvisionHash()
-        await fetchMachOHash()
-        await fetchBundleId()
-    }
-    
-    func fetchProvisionHash() async {
-        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/Values/ProvisionHash") { result in
-            self.expectedProvisionHash = result
+            await fetchProvisionHash()
+            await fetchMachOHash()
+            await fetchBundleId()
+            
+            // Print the results after all fetches are complete
+            print("ProvisionHash: \(expectedProvisionHash ?? "nil"), MachOHash: \(expectedMachOHash ?? "nil"), BundleId: \(expectedBundleId ?? "nil")")
         }
-    }
-    
-    func fetchMachOHash() async {
-        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/Values/MachOHash") { result in
-            self.expectedMachOHash = result
+        
+        func fetchProvisionHash() async {
+            await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/Values/ProvisionHash") { result in
+                self.expectedProvisionHash = result
+                print("Set expectedProvisionHash to: \(result ?? "nil")")
+            }
         }
-    }
-    
-    func fetchBundleId() async {
-        await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/IOSSecurityApp/BundleId") { result in
-            self.expectedBundleId = result
+        
+        func fetchMachOHash() async {
+            await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/Values/MachOHash") { result in
+                self.expectedMachOHash = result
+                print("Set expectedMachOHash to: \(result ?? "nil")")
+            }
         }
-    }
-    
+        
+        func fetchBundleId() async {
+            await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/Values/BundleId") { result in
+                self.expectedBundleId = result
+                print("Set expectedBundleId to: \(result ?? "nil")")
+            }
+        }
+        
     func fetchData(from urlString: String, completion: @escaping (String?) -> Void) async {
+        print("Attempting to fetch data from: \(urlString)")
+        
         guard let url = URL(string: urlString) else {
-            print("Invalid URL: \(urlString)")
+            print("Error: Invalid URL - \(urlString)")
             completion(nil)
             return
         }
         
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData // Ignore cache and always fetch from the server
+
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            print("Response: \(response)")
-            let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            print("Fetched data: \(result ?? "nil")")
-            DispatchQueue.main.async {
-                completion(result)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("Error: Not a valid HTTP response")
+                completion(nil)
+                return
+            }
+            
+            print("HTTP Status Code: \(httpResponse.statusCode)")
+            print("Response Headers: \(httpResponse.allHeaderFields)")
+            
+            if let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                print("Fetched data: \(result)")
+                DispatchQueue.main.async {
+                    completion(result)
+                }
+            } else {
+                print("Error: Unable to decode response data")
+                completion(nil)
             }
         } catch {
             print("Error fetching data from \(urlString): \(error)")
+            if let urlError = error as? URLError {
+                print("URL Error Code: \(urlError.code.rawValue)")
+                print("URL Error Description: \(urlError.localizedDescription)")
+            }
             DispatchQueue.main.async {
                 completion(nil)
             }
