@@ -1,6 +1,7 @@
 #########################
 # .gitignore file for Xcode4 and Xcode5 Source projects
-#
+archive/
+
 # Apple bugs, waiting for Apple to fix/respond:
 #
 #    15564624 - what does the xccheckout file in Xcode5 do? Where's the documentation?
