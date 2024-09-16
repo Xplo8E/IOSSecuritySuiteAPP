@@ -9,7 +9,10 @@ struct ContentView: View {
     @State private var expectedProvisionHash: String?
     @State private var expectedMachOHash: String?
     @State private var expectedBundleId: String?
+    @State private var expectedMainBinaryHash: String?
+    @State private var expectedIOSSecuritySuiteHash: String?
     @State private var resultText: AttributedString = AttributedString("Tap a button to run a security check")
+    @State private var resultSec: String = ""
     
     var body: some View {
         ScrollView {
@@ -24,10 +27,20 @@ struct ContentView: View {
                     .background(Color.gray.opacity(0.2))
                     .cornerRadius(10)
                 
-                  Button("Check Tamper/Intigrity ") {checkIntegrity()}
+                Text(resultSec)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(10)
+                
+                Button("Check Tamper/Intigrity ") {checkIntegrity()}
+                Button("Check Integrity of App") {checkAppIntegrity()}
                 Button("Show BundleId") {showBundleId()}
                 Button("Provision file Hash") {showHashOfProvision()}
                 Button("Show Binary Hash") {getBinaryHash()}
+//                Button("call findSection() func") {callFindSection()}
+                Button("Main Binary Hash") {getMainBinHash()}
+                Button("Frmwrk Hash") {getFrmwkHash()}
             }
             .padding()
         }
@@ -42,14 +55,28 @@ struct ContentView: View {
 //    "",
 //    ""
     
+    func getMainBinHash() {
+
+        let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "error"
+    
+        resultText = AttributedString("Main Binary hash: \n")
+        resultText += AttributedString(mainBinaryhash + "\n")
+    }
+    
+    func getFrmwkHash() {
+        let frameworkHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "error"
+        resultText = AttributedString("IOSSecuritySuite hash: \n")
+        resultText += AttributedString(frameworkHash + "\n")
+    }
     
     func fetchAllData() async {
             await fetchProvisionHash()
             await fetchMachOHash()
             await fetchBundleId()
+            await fetchMainBinaryHash()
             
             // Print the results after all fetches are complete
-            print("ProvisionHash: \(expectedProvisionHash ?? "nil"), MachOHash: \(expectedMachOHash ?? "nil"), BundleId: \(expectedBundleId ?? "nil")")
+            print("ProvisionHash: \(expectedProvisionHash ?? "nil"), MachOHash: \(expectedMachOHash ?? "nil"), BundleId: \(expectedBundleId ?? "nil"), MainBinaryHash: \(expectedMainBinaryHash ?? "nil")")
         }
         
         func fetchProvisionHash() async {
@@ -73,6 +100,14 @@ struct ContentView: View {
             }
         }
         
+        func fetchMainBinaryHash() async {
+            await fetchData(from: "https://raw.githubusercontent.com/Xplo8E/IOSSecuritySuiteAPP/master/Values/MainBinaryHash") { result in
+                self.expectedMainBinaryHash = result
+                print("Set expectedMainBinaryHash to: \(result ?? "nil")")
+            }
+        }
+    
+    
     func fetchData(from urlString: String, completion: @escaping (String?) -> Void) async {
         print("Attempting to fetch data from: \(urlString)")
         
@@ -153,12 +188,63 @@ struct ContentView: View {
     }
 
     func getBinaryHash() {
+        print("Default case of IntegrityCheckerImageTarget: \(IntegrityCheckerImageTarget.default)")
+
         let frameworkHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "error"
         resultText = AttributedString("IOSSecuritySuite hash: \n")
         resultText += AttributedString(frameworkHash + "\n")
         let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "error"
-        resultText += AttributedString("Main Binary hash: \n")
+        
+        
+        resultText += AttributedString("Default image hash: \n")
         resultText += AttributedString(mainBinaryhash + "\n")
+        
+    }
+    
+
+    
+    func callFindSection() {
+        // Get the MachOParse class using reflection
+            // Get the MachOParse class using reflection
+        print("[+] Entered callfindsection")
+            guard let machOParseClass = NSClassFromString("IOSSecuritySuite.MachOParse") as? NSObject.Type else {
+                print("Couldn't find MachOParse class")
+                resultSec = "Couldn't find MachOParse class"
+                return
+            }
+            
+            // Create an instance of MachOParse
+            let machOParse = machOParseClass.init()
+            
+            // Prepare arguments
+            let segname = "__TEXT"
+            let secname = "__text"
+            
+            // Get the method signature
+            let selector = NSSelectorFromString("findSection:secname:")
+            
+            // Check if the object responds to the selector
+            guard machOParse.responds(to: selector) else {
+                print("Object doesn't respond to findSection:secname:")
+                resultSec += "Object doesn't respond to findSection:secname:"
+                return
+            }
+            
+            // Call the method
+            let result = machOParse.perform(selector, with: segname, with: secname)
+            
+            // Handle the result
+            if let sectionInfo = result?.takeUnretainedValue() as? NSObject {
+                print("Section found:")
+                print("Address: \(sectionInfo.value(forKey: "addr") ?? "N/A")")
+                print("Size: \((sectionInfo.value(forKey: "section") as AnyObject).value(forKeyPath: "pointee.size") ?? "N/A")")
+                
+                resultSec += "Section found:"
+                resultSec += "Address: \(sectionInfo.value(forKey: "addr") ?? "N/A")"
+                resultSec += "Size: \((sectionInfo.value(forKey: "section") as AnyObject).value(forKeyPath: "pointee.size") ?? "N/A")"
+            } else {
+                print("Section not found or couldn't access result")
+            }
     }
     
     func checkIntegrity() {
@@ -230,6 +316,49 @@ struct ContentView: View {
             return Data(hash).hexEncodedString()
         }
         return "Error: Unable to calculate provision hash"
+    }
+
+    func checkAppIntegrity() {
+        guard let expectedMachOHash = expectedMachOHash,
+              let expectedMainBinaryHash = expectedMainBinaryHash else {
+            print("Expected data not loaded. MachOHash: \(expectedMachOHash ?? "nil"), MainBinaryHash: \(expectedMainBinaryHash ?? "nil")")
+            resultText = AttributedString("Error: Server expected data not loaded")
+            return
+        }
+        
+        let actualIOSSecuritySuiteHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "Invalid"
+        let actualMainBinaryHash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "Invalid"
+        
+        let iOSSecuritySuiteIntegrity = actualIOSSecuritySuiteHash == expectedMachOHash
+        let mainBinaryIntegrity = actualMainBinaryHash == expectedMainBinaryHash
+        
+        let isAppIntegral = iOSSecuritySuiteIntegrity && mainBinaryIntegrity
+        
+        var attributedString = AttributedString(isAppIntegral ? "App integrity check passed." : "App integrity check failed.") + AttributedString("\n\n")
+        attributedString.foregroundColor = isAppIntegral ? .green : .red
+        attributedString.font = .boldSystemFont(ofSize: 16)
+
+        let detailsString = """
+        Details:
+        
+        IOSSecuritySuite Framework check: \(iOSSecuritySuiteIntegrity ? "Passed" : "Failed")
+        Expected IOSSecuritySuite hash:
+        \(expectedMachOHash)
+        Actual IOSSecuritySuite hash:
+        \(actualIOSSecuritySuiteHash)
+
+        Main Binary check: \(mainBinaryIntegrity ? "Passed" : "Failed")
+        Expected Main Binary hash:
+        \(expectedMainBinaryHash)
+        Actual Main Binary hash:
+        \(actualMainBinaryHash)
+
+        Overall result: \(isAppIntegral ? "Passed" : "Failed")
+        """
+        
+        attributedString += AttributedString(detailsString)
+
+        resultText = attributedString
     }
 }
 
