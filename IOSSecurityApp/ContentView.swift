@@ -57,7 +57,7 @@ struct ContentView: View {
     
     func getMainBinHash() {
 
-        let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "error"
+        let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecurityApp")) ?? "error"
     
         resultText = AttributedString("Main Binary hash: \n")
         resultText += AttributedString(mainBinaryhash + "\n")
@@ -193,7 +193,7 @@ struct ContentView: View {
         let frameworkHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "error"
         resultText = AttributedString("IOSSecuritySuite hash: \n")
         resultText += AttributedString(frameworkHash + "\n")
-        let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "error"
+        let mainBinaryhash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecurityApp")) ?? "error"
         
         
         resultText += AttributedString("Default image hash: \n")
@@ -263,7 +263,7 @@ struct ContentView: View {
         tamperStatusText = isTampered == true ? "Have been Tampered." : "Have not been Tampered."
         
         let IOSSecHashValue = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "Invalid"
-        let mainBinaryHash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "Invalid"
+        let mainBinaryHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecurityApp")) ?? "Invalid"
         
         
         let tamperStatus = isTampered == true ? "Have been Tampered." : "Have not been Tampered."
@@ -327,7 +327,7 @@ struct ContentView: View {
         }
         
         let actualIOSSecuritySuiteHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecuritySuite")) ?? "Invalid"
-        let actualMainBinaryHash = IOSSecuritySuite.getMachOFileHashValue(.default) ?? "Invalid"
+        let actualMainBinaryHash = IOSSecuritySuite.getMachOFileHashValue(.custom("IOSSecurityApp")) ?? "Invalid"
         
         let iOSSecuritySuiteIntegrity = actualIOSSecuritySuiteHash == expectedMachOHash
         let mainBinaryIntegrity = actualMainBinaryHash == expectedMainBinaryHash
